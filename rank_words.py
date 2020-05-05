@@ -8,7 +8,7 @@ Execute the TextRank algorithm.
 from paths import raw_dir, sxhy_path, wordrank_path, check_uptodate
 from poems import Poems
 from utils import is_cn_sentence, split_sentences
-from segment import Segmenter
+# from segment import Segmenter
 from singleton import Singleton
 from typing import Dict, List, Tuple, Set
 import json
@@ -72,7 +72,7 @@ class RankedWords(Singleton):
         # 生成分词的《诗学含英》
         if not check_uptodate(sxhy_path):
             _gen_sxhy_dict()
-        with open(sxhy_path, 'r') as fin:
+        with open(sxhy_path, 'r',encoding='utf-8') as fin:
             self.sxhy_dict: Set[str] = set(fin.read().split())
 
         # 生成 TextRank
@@ -155,7 +155,6 @@ class RankedWords(Singleton):
 
     def _get_adjlists(self) -> Dict[str, Dict[str, float]]:
         print("[TextRank] Generating word graph ...")
-        segmenter = Segmenter()
         poems = Poems()
         
         # 获取共现矩阵（邻接表）：两个词在同一句中共同出现的次数。使用 adjlists
@@ -180,7 +179,7 @@ class RankedWords(Singleton):
         for poem in poems:
             for sentence in poem:
                 words: List[str] = []
-                for word in segmenter.segment(sentence):
+                for word in sentence:
                     if word not in self.stopwords:
                         words.append(word)
                 for word in words:

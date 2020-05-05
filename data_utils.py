@@ -5,14 +5,17 @@ from word_dict import end_of_sentence, start_of_sentence
 from paths import gen_data_path, plan_data_path, check_uptodate
 from poems import Poems
 from rank_words import RankedWords
-from segment import Segmenter
+from utils import split_sentences
 import re
 import subprocess
 
 
 def gen_train_data():
     print("Generating training data ...")
-    segmenter = Segmenter()
+    with open(r'./raw/corpus.txt', 'r',encoding='utf-8') as fin:
+        for line in fin.readlines()[0 : 6]:
+            for sentence in split_sentences(line):
+                print(' '.join(sentence))
     poems = Poems()
     poems.shuffle()
     ranked_words = RankedWords()
@@ -29,8 +32,7 @@ def gen_train_data():
             if len(sentence) != 4: # 选七言诗，七言诗有四个词
                 valid = False
                 break
-            words = list(filter(lambda seg: seg in ranked_words, 
-                    segmenter.segment(sentence)))
+            words = list(filter(lambda seg: seg in ranked_words, sentence))
             if len(words) == 0:
                 valid = False
                 break
