@@ -1,0 +1,299 @@
+# -*- coding:utf-8 -*-
+
+from char2vec import Char2Vec
+from char_dict import CharDict, end_of_sentence, start_of_sentence
+from data_utils import batch_train_data
+from paths import save_dir
+from pron_dict import PronDict
+from random import random
+from singleton import Singleton
+from utils import CHAR_VEC_DIM, NUM_OF_SENTENCES
+import numpy as np
+import os
+import sys
+import tensorflow as tf
+
+_BATCH_SIZE = 128
+NUM_UNITS = 512
+LEN_PER_SENTENCE = 7
+_model_path = os.path.join(save_dir, 'model')
+class Generator():
+
+
+    #构造key_word层
+    def _build_keyword_encoder(self):
+        # 输入是B * key_word_length * 字向量长度
+        self.keyword = tf.placeholder(
+            shape=[_BATCH_SIZE, None, CHAR_VEC_DIM],
+            dtype=tf.float32,
+            name="keyword")
+        # 输入是 B * 1
+        self.keyword_length = tf.placeholder(shape=[_BATCH_SIZE],
+                                             dtype=tf.int32,
+                                             name="keyword_length")  # keyword长度
+        #
+        _, states = tf.nn.bidirectional_dynamic_rnn(
+            cell_fw=tf.contrib.rnn.GRUCell(num_units=NUM_UNITS / 2),
+            cell_bw=tf.contrib.rnn.GRUCell(num_units=NUM_UNITS / 2),
+            inputs=self.keyword,
+            sequence_length=self.keyword_length,
+            dtype=tf.float32,
+            scope="keyword_encoder")
+        states_fw, states_bw = states
+        self.keyword_state = tf.concat([states_fw, states_bw], axis=-1)  # concat双向的input
+        tf.TensorShape([_BATCH_SIZE, NUM_UNITS]).assert_same_rank(self.keyword_state.shape)
+
+    #构造语境输入
+    def _build_context_encoder(self):
+        #输入为B * length_per_sentence(每次输入的句子以^开始，以$结尾, 所以输入长度大概是9) * unit
+        self.context = tf.placeholder(
+            shape=[_BATCH_SIZE, None, CHAR_VEC_DIM],
+            dtype=tf.float32,
+            name="context")
+        self.context_length = tf.placeholder(shape=[_BATCH_SIZE],
+                                             dtype=tf.int32,
+                                             name="context_length")
+
+        outputs, _ = tf.nn.bidirectional_dynamic_rnn(
+            cell_fw=tf.contrib.rnn.GRUCell(num_units=NUM_UNITS / 2),
+            cell_bw=tf.contrib.rnn.GRUCell(num_units=NUM_UNITS / 2),
+            inputs=self.context,
+            sequence_length=self.context_length,
+            dtype=tf.float32,
+            scope="context_encoder")
+        output_fw, output_bw = outputs
+        self.context_output = tf.concat([output_fw, output_bw], axis=-1)
+        tf.TensorShape([_BATCH_SIZE, None, NUM_UNITS]).assert_same_rank(self.context_output.shape)
+
+    def _build_decoder(self):
+        with tf.name_scope("decoder"):
+            attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(
+                num_units=NUM_UNITS,
+                memory=self.context_output, # 将 两个 encoder 的输入作为输出
+                memory_sequence_length=self.context_length,
+                name="BahdanauAttention",
+            )
+            # 将解码GRU单元用ATTENSTTION封装
+            decoder_rnn_cell = tf.contrib.seq2seq.AttentionWrapper( # decoder 的RNN单元
+                cell=tf.contrib.rnn.GRUCell(NUM_UNITS),
+                attention_mechanism=attention_mechanism,
+                initial_cell_state=self.keyword_state,
+                name="decoder_rnn_cell",
+            )
+            # 解码器训练
+            self.decoder_input = tf.placeholder(
+                shape= [_BATCH_SIZE, None, NUM_UNITS],
+                dtype=tf.float32,
+                name="input"
+            )
+            self.decoder_length = tf.placeholder(
+                shape= [_BATCH_SIZE],
+                dtype = tf.int32,
+                name='length'
+            )
+            print(self.keyword_state)
+            decoder_init_state = decoder_rnn_cell.zero_state(dtype=tf.float32, batch_size=_BATCH_SIZE).clone(cell_state=self.keyword_state)
+            self.decoder_output, _ = tf.nn.dynamic_rnn(
+                cell=decoder_rnn_cell,
+                inputs=self.decoder_input,
+                sequence_length=self.decoder_length,
+                initial_state=decoder_rnn_cell.zero_state(dtype=tf.float32, batch_size=_BATCH_SIZE),
+                dtype=tf.float32
+            )
+            # 解码器的输出 每个循环生成Batch_size 个 prob；一共生成len_per_sentence + 1 轮
+            tf.TensorShape([_BATCH_SIZE, None, NUM_UNITS]).assert_same_rank(self.decoder_output.shape)
+    def _build_soft_max(self):
+        with tf.name_scope("softmax"):
+            weight = tf.Variable(
+                initial_value=tf.random_normal(
+                shape=(NUM_UNITS, len(self.char_dict)),
+                stddev=0.08,
+                mean=0.00,
+                dtype=tf.float32
+            ),
+                dtype=tf.float32,
+                name="weight")
+            bias= tf.Variable(
+                initial_value=tf.zeros(shape=(len(self.char_dict)), dtype=tf.float32),
+                dtype=tf.float32,
+                name="bias"
+            )
+            #tf.TensorShape([_BATCH_SIZE, LEN_PER_SENTENCE + 1, NUM_UNITS]).assert_same_rank(self.decoder_output.shape)
+            reshaped_output = tf.reshape(self.decoder_output, [_BATCH_SIZE * (LEN_PER_SENTENCE + 1), NUM_UNITS])
+            self.probs = tf.nn.softmax(tf.matmul(reshaped_output, weight) + bias, axis=-1)
+            #tf.TensorShape([_BATCH_SIZE, len(self.char_dict)]).assert_same_rank(self.probs.shape)
+    #训练
+    def _build_optimizer(self):
+        lr = 1e-3
+        # 这里的label 按batch来，首先是所有batch的首字label，然后是第二字label，最后到休止符label
+        self.labels = tf.placeholder(shape=[None],
+                                                 dtype=tf.int32,
+                                                 name="labels")
+        label = tf.one_hot(self.labels, len(self.char_dict))
+        self.mean_loss = tf.reduce_mean(tf.reduce_max(-label * tf.math.log(self.probs + 0.000001), axis=-1), axis=-1)
+        self.train_op = tf.train.AdamOptimizer(learning_rate=lr).minimize(
+            self.mean_loss)
+    # 构造函数中调用
+    def _build_layers(self):
+        self._build_keyword_encoder()
+        self._build_context_encoder()
+        self._build_decoder()
+        self._build_soft_max()
+        self._build_optimizer()
+
+    # 构造函数
+    def __init__(self):
+        self.char_dict = CharDict()  # 字典长度,之后调用
+        self.char2vec = Char2Vec()
+        self._build_layers()  # 生成结构
+        self.saver = tf.train.Saver(tf.global_variables())  # 定义模型
+
+    def generate(self, keywords):
+        '''
+            输入：
+                keyword：
+                keyword_length
+                context
+                context_length
+                无label的事情
+                根据生成的句子生成下一句
+                keyword = ["春"， "华"， “秋”， “实”]
+                context = ["^"] -> ["^春花秋月何时了$"] -> ["^春花秋月何时了$往事知多少$"]
+                ret =
+        '''
+        pron_dict = PronDict()
+        context = "^"
+        with tf.Session() as sess:
+            ckpt = tf.train.get_checkpoint_state(save_dir)
+            #trained = False
+            print(1)
+            self.saver.restore(sess, 'C:\\test\Chinese-Poetry-Generation-master\Chinese-Poetry-Generation-master\save\model')
+            trained = True
+            if not trained:
+                print("要记得先训模型哦")
+                sys.exit(1)
+            for i in range(len(keywords)):
+                keyword = keywords[i]
+                kw, kw_l = self.get_data_length([keyword for _ in range(_BATCH_SIZE)])
+                ct, ct_l = self.get_data_length([context for _ in range(_BATCH_SIZE)])
+                dd, dd_l = self.get_decoder_length([context for _ in range(_BATCH_SIZE)])
+                feed_dict = {
+                    self.keyword: kw,
+                    self.keyword_length: kw_l,
+                    self.context: ct,
+                    self.context_length: ct_l,
+                    self.decoder_length: dd_l,
+                    self.decoder_input: dd
+                }
+                prob = sess.run(self.probs, feed_dict=feed_dict)
+                for j in range(LEN_PER_SENTENCE):
+                    context += self.char_dict.int2char(np.argmax(prob[j]))
+                context += end_of_sentence()
+        return context[1:].split(end_of_sentence())
+
+
+    def train(self, epoch):
+        '''
+            输入：
+                keyword：
+                keyword_length
+                context
+                context_length
+                无label的事情
+                根据生成的句子生成下一句
+                keyword = ["春"， "往事"， "楼"， "故国"]
+                context = ["^", "^春花秋月何时了$", "春花秋月何时了$往事知多少$"]
+                label = ["春花秋月何时了$", "往事知多少$", "小楼昨夜又东风$"]
+        '''
+        with tf.Session() as sess:
+            ckpt = tf.train.get_checkpoint_state(save_dir)
+            if not ckpt or not ckpt.model_checkpoint_path:
+                sess.run(tf.global_variables_initializer())
+                sess.run(tf.local_variables_initializer())
+            else:
+                self.saver.restore(sess, ckpt.model_checkpoint_path)
+            for i in range(epoch):
+                cnt = 0
+                for keyword, context, label in batch_train_data(_BATCH_SIZE): # _BATCH_SIZE * l; _BATCH_SIZE * length; _BATCH_SIZE * length
+                    # 这个循环会进行 总唐诗数 / _BATCH_SIZE次
+                    if len(keyword) < _BATCH_SIZE:
+                        break
+                    kw, kw_l = self.get_data_length(keyword)
+                    ct, ct_l = self.get_data_length(context)
+                    dd, dd_l = self.get_decoder_length(context)
+                    lb = self.get_label(label)
+                    feed_dict = {
+                        self.keyword: kw,
+                        self.keyword_length :kw_l,
+                        self.context:ct,
+                        self.context_length: ct_l,
+                        self.labels :lb,
+                        self.decoder_length:dd_l,
+                        self.decoder_input:dd
+                    }
+                    print(np.shape(lb))
+                    _, loss = sess.run([self.train_op, self.mean_loss], feed_dict=feed_dict)
+                    cnt+=1
+                    print("it is trainning!!!loss:%f", loss)
+                    if cnt % 64 == 0:
+                        self.saver.save(sess, _model_path)
+                        print("epoch: %d, have_trained_batch: %d, loss: %f"%(i, cnt, loss))
+
+    def get_decoder_length(self, a):
+        assert type(a) == list
+        assert len(a) == _BATCH_SIZE
+        for i in range(len(a)):
+            if len(a[i]) == 1:
+                a[i] = "$"
+                continue
+            l = len(a[i])
+            for j in range(l - 2, -1, -1):
+                if a[i][j] == '$' or a[i][j] == '^':
+                    a[i] = a[i][j + 1:]
+                    break
+        ret, ret_l = self.get_data_length(a)
+        return ret, ret_l
+
+    def get_data_length(self, a):
+        '''
+                keyword = ["春"， "往事"， "楼"， "故国"]
+                context = ["^", "^春花秋月何时了$", "^春花秋月何时了$往事知多少$"]
+                setence = ["春花秋月何时了$", "春花秋月何时了$往事知多少$", "春花秋月何时了$往事知多少$小楼昨夜又东风$"]
+        '''
+        assert type(a) == list
+        assert len(a) == _BATCH_SIZE
+        # a 是字符串序列
+        maxtime = max(map(len, a))
+        ret = np.zeros(shape=[_BATCH_SIZE, maxtime, CHAR_VEC_DIM], dtype=np.float32)
+        length = np.zeros(shape=[_BATCH_SIZE, 1])
+        for i in range(_BATCH_SIZE):
+            length[i] = len(a[i])
+            for j in range(maxtime):
+                if j < len(a[i]):
+                    ret[i][j] = self.char2vec.get_vect(a[i][j])
+                else:
+                    ret[i][j] = self.char2vec.get_vect(end_of_sentence()) #不确定
+        length = np.reshape(length, [length.shape[0]])
+        return ret, length
+    def get_label(self, a):
+        '''label = ["春花$", "往$", "小$"]
+            label = [id(chun), id(往), id(小), id(花), id($), id($), id($), id($), id($)]
+        '''
+        print(type(a))
+        assert type(a) == list
+        assert len(a) == _BATCH_SIZE
+        maxtime = max(map(len, a))
+        ret = np.zeros(shape=(_BATCH_SIZE * maxtime), dtype=np.int32)
+        tmp = 0
+        for i in range(_BATCH_SIZE):
+            for j in range(maxtime):
+                if(len(a[i]) < j + 1):
+                    ret[tmp] = self.char_dict.char2int(end_of_sentence())
+                else:
+                    ret[tmp] = self.char_dict.char2int(a[i][j])
+                tmp+=1
+        return ret
+if __name__ == "__main__":
+    generator = Generator()
+    poem = generator.generate(["梅", "兰", "竹", "菊"])
+    print(poem)
