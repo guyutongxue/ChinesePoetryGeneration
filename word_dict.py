@@ -6,7 +6,7 @@ import pickle as pkl
 from singleton import Singleton
 
 MAX_DICT_SIZE = 100000
-word_dict_storefile=r'C:\Users\86139\OneDrive\桌面\ChinesePoetryGeneration\raw\raw_dict.txt'
+word_dict_storefile=r'.\raw\raw_dict.txt'
 
 
 def start_of_sentence():
