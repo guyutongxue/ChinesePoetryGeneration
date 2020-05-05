@@ -16,7 +16,7 @@ sxhy_path = os.path.join(data_dir, 'sxhy_dict.txt')
 word_dict_path = os.path.join(data_dir, 'word_dict.txt')
 poems_path = os.path.join(data_dir, 'poem.txt')
 word2vec_path = os.path.join(data_dir, 'word2vec.npy')
-wordrank_path = os.path.join(data_dir, 'wordrank.txt')
+wordrank_path = os.path.join(data_dir, 'wordrank.json')
 plan_data_path = os.path.join(data_dir, 'plan_data.txt')
 gen_data_path = os.path.join(data_dir, 'gen_data.txt')
 
