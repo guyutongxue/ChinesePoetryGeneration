@@ -1,13 +1,13 @@
 # -*- coding:utf-8 -*-
 
-from char2vec import Char2Vec
-from char_dict import CharDict, end_of_sentence, start_of_sentence
+from word_vec2 import word2Vec
+from word_dict import wordDict, end_of_sentence, start_of_sentence
 from data_utils import batch_train_data
 from paths import save_dir
 from pron_dict import PronDict
 from random import random
 from singleton import Singleton
-from utils import CHAR_VEC_DIM, NUM_OF_SENTENCES
+from utils import WORD_VEC_DIM, NUM_OF_SENTENCES
 import numpy as np
 import os
 import sys
@@ -24,7 +24,7 @@ class Generator():
     def _build_keyword_encoder(self):
         # 输入是B * key_word_length * 字向量长度
         self.keyword = tf.placeholder(
-            shape=[_BATCH_SIZE, None, CHAR_VEC_DIM],
+            shape=[_BATCH_SIZE, None, WORD_VEC_DIM],
             dtype=tf.float32,
             name="keyword")
         # 输入是 B * 1
@@ -47,7 +47,7 @@ class Generator():
     def _build_context_encoder(self):
         #输入为B * length_per_sentence(每次输入的句子以^开始，以$结尾, 所以输入长度大概是9) * unit
         self.context = tf.placeholder(
-            shape=[_BATCH_SIZE, None, CHAR_VEC_DIM],
+            shape=[_BATCH_SIZE, None, WORD_VEC_DIM],
             dtype=tf.float32,
             name="context")
         self.context_length = tf.placeholder(shape=[_BATCH_SIZE],
@@ -143,8 +143,8 @@ class Generator():
 
     # 构造函数
     def __init__(self):
-        self.char_dict = CharDict()  # 字典长度,之后调用
-        self.char2vec = Char2Vec()
+        self.char_dict = wordDict()  # 字典长度,之后调用
+        self.char2vec = word2Vec()
         self._build_layers()  # 生成结构
         self.saver = tf.train.Saver(tf.global_variables())  # 定义模型
 
@@ -187,7 +187,7 @@ class Generator():
                 }
                 prob = sess.run(self.probs, feed_dict=feed_dict)
                 for j in range(LEN_PER_SENTENCE):
-                    context += self.char_dict.int2char(np.argmax(prob[j]))
+                    context += self.char_dict.int2word(np.argmax(prob[j]))
                 context += end_of_sentence()
         return context[1:].split(end_of_sentence())
 
@@ -264,7 +264,7 @@ class Generator():
         assert len(a) == _BATCH_SIZE
         # a 是字符串序列
         maxtime = max(map(len, a))
-        ret = np.zeros(shape=[_BATCH_SIZE, maxtime, CHAR_VEC_DIM], dtype=np.float32)
+        ret = np.zeros(shape=[_BATCH_SIZE, maxtime, WORD_VEC_DIM], dtype=np.float32)
         length = np.zeros(shape=[_BATCH_SIZE, 1])
         for i in range(_BATCH_SIZE):
             length[i] = len(a[i])
@@ -288,9 +288,9 @@ class Generator():
         for i in range(_BATCH_SIZE):
             for j in range(maxtime):
                 if(len(a[i]) < j + 1):
-                    ret[tmp] = self.char_dict.char2int(end_of_sentence())
+                    ret[tmp] = self.char_dict.word2int(end_of_sentence())
                 else:
-                    ret[tmp] = self.char_dict.char2int(a[i][j])
+                    ret[tmp] = self.char_dict.word2int(a[i][j])
                 tmp+=1
         return ret
 if __name__ == "__main__":
