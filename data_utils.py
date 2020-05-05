@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 #-*- coding:utf-8 -*-
 
-from char_dict import end_of_sentence, start_of_sentence
+from word_dict import end_of_sentence, start_of_sentence
 from paths import gen_data_path, plan_data_path, check_uptodate
 from poems import Poems
 from rank_words import RankedWords
@@ -26,7 +26,7 @@ def gen_train_data():
         gen_lines = []
         keywords = []
         for sentence in poem:
-            if len(sentence) != 7:
+            if len(sentence) != 4: # 选七言诗，七言诗有四个词
                 valid = False
                 break
             words = list(filter(lambda seg: seg in ranked_words, 
@@ -38,11 +38,11 @@ def gen_train_data():
             for word in words[1 : ]:
                 if ranked_words.get_rank(word) < ranked_words.get_rank(keyword):
                     keyword = word
-            gen_line = sentence + end_of_sentence() + \
+            gen_line = ' '.join(sentence) + end_of_sentence() + \
                     '\t' + keyword + '\t' + context + '\n'
             gen_lines.append(gen_line)
             keywords.append(keyword)
-            context += sentence + end_of_sentence()
+            context += ' '.join(sentence) + end_of_sentence()
         if valid:
             plan_data.append('\t'.join(keywords) + '\n')
             gen_data.extend(gen_lines)

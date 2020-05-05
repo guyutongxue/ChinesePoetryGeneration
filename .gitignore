@@ -3,6 +3,7 @@
 *.pyc
 save/
 .backup/
+.idea/
 
 # VS Code User settings
 .vscode/

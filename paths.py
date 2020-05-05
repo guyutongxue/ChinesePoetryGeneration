@@ -13,9 +13,9 @@ raw_dir = os.path.join(root_dir, 'raw')
 save_dir = os.path.join(root_dir, 'save')
 
 sxhy_path = os.path.join(data_dir, 'sxhy_dict.txt')
-char_dict_path = os.path.join(data_dir, 'char_dict.txt')
+word_dict_path = os.path.join(data_dir, 'word_dict.txt')
 poems_path = os.path.join(data_dir, 'poem.txt')
-char2vec_path = os.path.join(data_dir, 'char2vec.npy')
+word2vec_path = os.path.join(data_dir, 'word2vec.npy')
 wordrank_path = os.path.join(data_dir, 'wordrank.txt')
 plan_data_path = os.path.join(data_dir, 'plan_data.txt')
 gen_data_path = os.path.join(data_dir, 'gen_data.txt')
@@ -23,11 +23,11 @@ gen_data_path = os.path.join(data_dir, 'gen_data.txt')
 
 # TODO: configure dependencies in another file.
 _dependency_dict = {
-        poems_path : [char_dict_path],
-        char2vec_path : [char_dict_path, poems_path],
+        poems_path : [word_dict_path],
+        word2vec_path : [word_dict_path, poems_path],
         wordrank_path : [sxhy_path, poems_path],
-        gen_data_path : [char_dict_path, poems_path, sxhy_path, char2vec_path],
-        plan_data_path : [char_dict_path, poems_path, sxhy_path, char2vec_path],
+        gen_data_path : [word_dict_path, poems_path, sxhy_path, word2vec_path],
+        plan_data_path : [word_dict_path, poems_path, sxhy_path, word2vec_path],
         }
 
 def check_uptodate(path: str) -> bool:

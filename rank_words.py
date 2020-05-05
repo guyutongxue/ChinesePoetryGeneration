@@ -39,10 +39,10 @@ def _gen_sxhy_dict() -> None:
                     continue
                 idx: int = 0
                 while idx + 4 <= len(phrase):
-                    # Cut 2 chars each time.
+                    # Cut 2 words each time.
                     words.add(phrase[idx: idx + 2])
                     idx += 2
-                # Use jieba to cut the last 3 chars.
+                # Use jieba to cut the last 3 words.
                 if idx < len(phrase):
                     for word in jieba.lcut(phrase[idx:]):
                         words.add(word)
