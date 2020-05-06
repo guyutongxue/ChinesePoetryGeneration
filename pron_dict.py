@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 # -*- coding:utf-8 -*-
 
-from char_dict import CharDict
+from word_dict import wordDict
 from paths import raw_dir
 from singleton import Singleton
 import os
@@ -55,7 +55,7 @@ def _get_rhyme(pinyin):
 class PronDict(Singleton):
 
     def __init__(self):
-        self.char_dict = CharDict()
+        self.char_dict = wordDict()
         self._pron_dict = dict()
         with open(_pinyin_path, 'r') as fin:
             for line in fin.readlines():
@@ -98,10 +98,10 @@ class PronDict(Singleton):
 # For testing purpose.
 if __name__ == '__main__':
     pron_dict = PronDict()
-    assert pron_dict.co_rhyme('ç”Ÿ', 'æƒ…')
-    assert not pron_dict.co_rhyme('è›¤', 'äºº')
-    assert pron_dict.counter_tone('å¹³', 'ä»„')
-    assert not pron_dict.counter_tone('èµ·', 'å¼ƒ')
+    print(pron_dict.co_rhyme('ÑÌ', 'ÔÂ'))
+    assert not pron_dict.co_rhyme('¸ò', 'ÈË')
+    assert pron_dict.counter_tone('Æ½', 'ØÆ')
+    assert not pron_dict.counter_tone('Æð', 'Æú')
     cnt = 0
     for ch in pron_dict:
         print(ch + ": "+str(pron_dict[ch]))
