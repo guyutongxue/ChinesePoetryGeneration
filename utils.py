@@ -16,6 +16,6 @@ def split_sentences(text: str) -> List[str]:
     sentences=text.strip().split('|')
     return sentences
 
-NUM_OF_SENTENCES = 4
-WORD_VEC_DIM = 512
+NUM_OF_SENTENCES = 3
+WORD_VEC_DIM = 256
 

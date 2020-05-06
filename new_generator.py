@@ -1,13 +1,13 @@
 # -*- coding:utf-8 -*-
 
-from char2vec import Char2Vec
-from char_dict import CharDict, end_of_sentence, start_of_sentence
+from word_vec2 import word2Vec
+from word_dict import wordDict, end_of_sentence, start_of_sentence
 from data_utils import batch_train_data
 from paths import save_dir
 from pron_dict import PronDict
 from random import random
 from singleton import Singleton
-from utils import CHAR_VEC_DIM, NUM_OF_SENTENCES
+from utils import WORD_VEC_DIM, NUM_OF_SENTENCES
 import numpy as np
 import os
 import sys
@@ -15,22 +15,22 @@ import tensorflow as tf
 
 _BATCH_SIZE = 128
 NUM_UNITS = 512
-LEN_PER_SENTENCE = 7
+LEN_PER_SENTENCE = 4
 _model_path = os.path.join(save_dir, 'model')
 class Generator():
 
 
-    #æ„é€ key_wordå±‚
+    #¹¹Ôìkey_word²ã
     def _build_keyword_encoder(self):
-        # è¾“å…¥æ˜¯B * key_word_length * å­—å‘é‡é•¿åº¦
+        # ÊäÈëÊÇB * key_word_length * ×ÖÏòÁ¿³¤¶È
         self.keyword = tf.placeholder(
-            shape=[_BATCH_SIZE, None, CHAR_VEC_DIM],
+            shape=[_BATCH_SIZE, None, WORD_VEC_DIM],
             dtype=tf.float32,
             name="keyword")
-        # è¾“å…¥æ˜¯ B * 1
+        # ÊäÈëÊÇ B * 1
         self.keyword_length = tf.placeholder(shape=[_BATCH_SIZE],
                                              dtype=tf.int32,
-                                             name="keyword_length")  # keywordé•¿åº¦
+                                             name="keyword_length")  # keyword³¤¶È
         #
         _, states = tf.nn.bidirectional_dynamic_rnn(
             cell_fw=tf.contrib.rnn.GRUCell(num_units=NUM_UNITS / 2),
@@ -40,14 +40,14 @@ class Generator():
             dtype=tf.float32,
             scope="keyword_encoder")
         states_fw, states_bw = states
-        self.keyword_state = tf.concat([states_fw, states_bw], axis=-1)  # concatåŒå‘çš„input
+        self.keyword_state = tf.concat([states_fw, states_bw], axis=-1)  # concatË«ÏòµÄinput
         tf.TensorShape([_BATCH_SIZE, NUM_UNITS]).assert_same_rank(self.keyword_state.shape)
 
-    #æ„é€ è¯­å¢ƒè¾“å…¥
+    #¹¹ÔìÓï¾³ÊäÈë
     def _build_context_encoder(self):
-        #è¾“å…¥ä¸ºB * length_per_sentence(æ¯æ¬¡è¾“å…¥çš„å¥å­ä»¥^å¼€å§‹ï¼Œä»¥$ç»“å°¾, æ‰€ä»¥è¾“å…¥é•¿åº¦å¤§æ¦‚æ˜¯9) * unit
+        #ÊäÈëÎªB * length_per_sentence(Ã¿´ÎÊäÈëµÄ¾ä×ÓÒÔ^¿ªÊ¼£¬ÒÔ$½áÎ², ËùÒÔÊäÈë³¤¶È´ó¸ÅÊÇ9) * unit
         self.context = tf.placeholder(
-            shape=[_BATCH_SIZE, None, CHAR_VEC_DIM],
+            shape=[_BATCH_SIZE, None, WORD_VEC_DIM],
             dtype=tf.float32,
             name="context")
         self.context_length = tf.placeholder(shape=[_BATCH_SIZE],
@@ -69,18 +69,18 @@ class Generator():
         with tf.name_scope("decoder"):
             attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(
                 num_units=NUM_UNITS,
-                memory=self.context_output, # å°† ä¸¤ä¸ª encoder çš„è¾“å…¥ä½œä¸ºè¾“å‡º
+                memory=self.context_output, # ½« Á½¸ö encoder µÄÊäÈë×÷ÎªÊä³ö
                 memory_sequence_length=self.context_length,
                 name="BahdanauAttention",
             )
-            # å°†è§£ç GRUå•å…ƒç”¨ATTENSTTIONå°è£…
-            decoder_rnn_cell = tf.contrib.seq2seq.AttentionWrapper( # decoder çš„RNNå•å…ƒ
+            # ½«½âÂëGRUµ¥ÔªÓÃATTENSTTION·â×°
+            decoder_rnn_cell = tf.contrib.seq2seq.AttentionWrapper( # decoder µÄRNNµ¥Ôª
                 cell=tf.contrib.rnn.GRUCell(NUM_UNITS),
                 attention_mechanism=attention_mechanism,
                 initial_cell_state=self.keyword_state,
                 name="decoder_rnn_cell",
             )
-            # è§£ç å™¨è®­ç»ƒ
+            # ½âÂëÆ÷ÑµÁ·
             self.decoder_input = tf.placeholder(
                 shape= [_BATCH_SIZE, None, NUM_UNITS],
                 dtype=tf.float32,
@@ -100,8 +100,8 @@ class Generator():
                 initial_state=decoder_rnn_cell.zero_state(dtype=tf.float32, batch_size=_BATCH_SIZE),
                 dtype=tf.float32
             )
-            # è§£ç å™¨çš„è¾“å‡º æ¯ä¸ªå¾ªç¯ç”ŸæˆBatch_size ä¸ª probï¼›ä¸€å…±ç”Ÿæˆlen_per_sentence + 1 è½®
-            tf.TensorShape([_BATCH_SIZE, None, NUM_UNITS]).assert_same_rank(self.decoder_output.shape)
+        
+
     def _build_soft_max(self):
         with tf.name_scope("softmax"):
             weight = tf.Variable(
@@ -122,10 +122,10 @@ class Generator():
             reshaped_output = tf.reshape(self.decoder_output, [_BATCH_SIZE * (LEN_PER_SENTENCE + 1), NUM_UNITS])
             self.probs = tf.nn.softmax(tf.matmul(reshaped_output, weight) + bias, axis=-1)
             #tf.TensorShape([_BATCH_SIZE, len(self.char_dict)]).assert_same_rank(self.probs.shape)
-    #è®­ç»ƒ
+    #ÑµÁ·
     def _build_optimizer(self):
         lr = 1e-3
-        # è¿™é‡Œçš„label æŒ‰batchæ¥ï¼Œé¦–å…ˆæ˜¯æ‰€æœ‰batchçš„é¦–å­—labelï¼Œç„¶åæ˜¯ç¬¬äºŒå­—labelï¼Œæœ€ååˆ°ä¼‘æ­¢ç¬¦label
+        # ÕâÀïµÄlabel °´batchÀ´£¬Ê×ÏÈÊÇËùÓĞbatchµÄÊ××Ölabel£¬È»ºóÊÇµÚ¶ş×Ölabel£¬×îºóµ½ĞİÖ¹·ûlabel
         self.labels = tf.placeholder(shape=[None],
                                                  dtype=tf.int32,
                                                  name="labels")
@@ -133,7 +133,7 @@ class Generator():
         self.mean_loss = tf.reduce_mean(tf.reduce_max(-label * tf.math.log(self.probs + 0.000001), axis=-1), axis=-1)
         self.train_op = tf.train.AdamOptimizer(learning_rate=lr).minimize(
             self.mean_loss)
-    # æ„é€ å‡½æ•°ä¸­è°ƒç”¨
+    # ¹¹Ôìº¯ÊıÖĞµ÷ÓÃ
     def _build_layers(self):
         self._build_keyword_encoder()
         self._build_context_encoder()
@@ -141,36 +141,36 @@ class Generator():
         self._build_soft_max()
         self._build_optimizer()
 
-    # æ„é€ å‡½æ•°
+    # ¹¹Ôìº¯Êı
     def __init__(self):
-        self.char_dict = CharDict()  # å­—å…¸é•¿åº¦,ä¹‹åè°ƒç”¨
-        self.char2vec = Char2Vec()
-        self._build_layers()  # ç”Ÿæˆç»“æ„
-        self.saver = tf.train.Saver(tf.global_variables())  # å®šä¹‰æ¨¡å‹
+        self.char_dict = wordDict()  # ×Öµä³¤¶È,Ö®ºóµ÷ÓÃ
+        self.char2vec = word2Vec()
+        self._build_layers()  # Éú³É½á¹¹
+        self.saver = tf.train.Saver(tf.global_variables())  # ¶¨ÒåÄ£ĞÍ
 
-    def generate(self, keywords):
+    def generate(self, keywords, context):
         '''
-            è¾“å…¥ï¼š
-                keywordï¼š
+            ÊäÈë£º
+                keyword£º
                 keyword_length
                 context
                 context_length
-                æ— labelçš„äº‹æƒ…
-                æ ¹æ®ç”Ÿæˆçš„å¥å­ç”Ÿæˆä¸‹ä¸€å¥
-                keyword = ["æ˜¥"ï¼Œ "å"ï¼Œ â€œç§‹â€ï¼Œ â€œå®â€]
-                context = ["^"] -> ["^æ˜¥èŠ±ç§‹æœˆä½•æ—¶äº†$"] -> ["^æ˜¥èŠ±ç§‹æœˆä½•æ—¶äº†$å¾€äº‹çŸ¥å¤šå°‘$"]
+                ÎŞlabelµÄÊÂÇé
+                ¸ù¾İÉú³ÉµÄ¾ä×ÓÉú³ÉÏÂÒ»¾ä
+                keyword = ["´º"£¬ "»ª"£¬ ¡°Çï¡±£¬ ¡°Êµ¡±]
+                context = ["^"] -> ["^´º»¨ÇïÔÂºÎÊ±ÁË$"] -> ["^´º»¨ÇïÔÂºÎÊ±ÁË$ÍùÊÂÖª¶àÉÙ$"]
                 ret =
         '''
         pron_dict = PronDict()
-        context = "^"
+        context = "^" + context + "$"
         with tf.Session() as sess:
             ckpt = tf.train.get_checkpoint_state(save_dir)
             #trained = False
             print(1)
-            self.saver.restore(sess, 'C:\\test\Chinese-Poetry-Generation-master\Chinese-Poetry-Generation-master\save\model')
+            self.saver.restore(sess, 'C:\\Users\l\Desktop\python\ChinesePoetryGeneration\save\model')
             trained = True
             if not trained:
-                print("è¦è®°å¾—å…ˆè®­æ¨¡å‹å“¦")
+                print("Òª¼ÇµÃÏÈÑµÄ£ĞÍÅ¶")
                 sys.exit(1)
             for i in range(len(keywords)):
                 keyword = keywords[i]
@@ -187,23 +187,75 @@ class Generator():
                 }
                 prob = sess.run(self.probs, feed_dict=feed_dict)
                 for j in range(LEN_PER_SENTENCE):
-                    context += self.char_dict.int2char(np.argmax(prob[j]))
+                    prob_lists = self.gen_prob_list(prob[j], context, pron_dict)
+                    char = self.char_dict.int2word(prob_lists.index(max(prob_lists)))
+                    #print(char)
+                    context+=char
+                    context += ' '
                 context += end_of_sentence()
         return context[1:].split(end_of_sentence())
 
+    def gen_prob_list(self, probs, context, pron_dict):#param probs:softmaxÊä³öµÄ¸ÅÂÊ·Ö²¼ context:ÒÑÉú³ÉµÄ¾ä×Ó pron_dict:ÒôÂÉ×Öµä
+        prob_list = probs.tolist()#array->list È¡Ê×ĞĞ
+        prob_list[0]*=0
+        prob_list[-1]*=0#Ê×Î²ÖÃ0
+        text = context
+        text = text.replace(' ', '')
+        #print(text)
+        idx = len(text)
+        used_chars = set(ch for ch in context)
+        for i in range(1, len(prob_list) - 1):
+            word = self.char_dict.int2word(i)
+            word_length = len(word)
+            if word_length == 0:
+                continue
+            first_ch = word[0]
+            last_ch = word[-1]#Ä©Î²µ¥×Ö
+            #idx±ÈlistÏÂ±êÒª´ó1(ÒòÎªÓĞstart_of_sentenceÎªcontext[0])
+            #Ò»ĞĞ7¸ö×ÖÒ»¸öend e.g:a[1]-a[7]=char a[8]=$
+            # Penalize used characters. ×Ö´ÊÖØ¸´
+            if first_ch in used_chars or last_ch in used_chars:
+                prob_list[i] *= 0.01
+
+            #³¬×Ö´¦Àí£¬Ä¬ÈÏ´ÊÓï×î³¤Îª2£¬Ö±½Ó¸ÅÂÊÇåÁã£¬È·±£²»³¬
+            if(idx == 6 or idx == 14 or idx == 22 or idx == 30) and word_length == 1:
+                prob_list[i] *= 0
+                continue
+            if(idx == 7 or idx == 15 or idx == 23 or idx == 31) and (word_length == 2):
+                prob_list[i] *= 0
+                continue
+            #ÏÂÃæµÄÑºÔÏ¡¢Æ½ØÆÍ¬Àí¿ÉÒÔºóÃæÔÙÏ¸¸Ä£¬µÈÈ·¶¨Êı¾İĞÎÊ½ÎÒÔÙÀ´¸Ä
+            if (idx == 16-word_length or idx == 32-word_length) and \
+                    not pron_dict.co_rhyme(last_ch, text[7]):
+                prob_list[i] *= 1e-7#²»ÑºÔÏ¿ÉÒÔ¼ÌĞø½µµÍÈ¨ÖØ£¬±£Ö¤ÊÓ¾õĞ§¹û
+
+            if idx > 2 and idx % 8 == 2 and \
+                    not pron_dict.counter_tone(text[2], first_ch) and word_length == 1:
+                prob_list[i] *= 0.4
+            if idx > 2 and idx % 8 == 1 and \
+                    not pron_dict.counter_tone(text[2], last_ch) and word_length == 2:
+                prob_list[i] *= 0.4
+
+            if (idx % 8  == 4 or idx % 8 == 6) and \
+                    not pron_dict.counter_tone(text[idx - 2], first_ch) and word_length == 1:
+                prob_list[i] *= 0.4
+            if (idx % 8  == 3 or idx % 8 == 5) and \
+                    not pron_dict.counter_tone(text[idx - 2], last_ch) and word_length == 2:
+                prob_list[i] *= 0.4
+        return prob_list
 
     def train(self, epoch):
         '''
-            è¾“å…¥ï¼š
-                keywordï¼š
+            ÊäÈë£º
+                keyword£º
                 keyword_length
                 context
                 context_length
-                æ— labelçš„äº‹æƒ…
-                æ ¹æ®ç”Ÿæˆçš„å¥å­ç”Ÿæˆä¸‹ä¸€å¥
-                keyword = ["æ˜¥"ï¼Œ "å¾€äº‹"ï¼Œ "æ¥¼"ï¼Œ "æ•…å›½"]
-                context = ["^", "^æ˜¥èŠ±ç§‹æœˆä½•æ—¶äº†$", "æ˜¥èŠ±ç§‹æœˆä½•æ—¶äº†$å¾€äº‹çŸ¥å¤šå°‘$"]
-                label = ["æ˜¥èŠ±ç§‹æœˆä½•æ—¶äº†$", "å¾€äº‹çŸ¥å¤šå°‘$", "å°æ¥¼æ˜¨å¤œåˆä¸œé£$"]
+                ÎŞlabelµÄÊÂÇé
+                ¸ù¾İÉú³ÉµÄ¾ä×ÓÉú³ÉÏÂÒ»¾ä
+                keyword = ["´º"£¬ "ÍùÊÂ"£¬ "Â¥"£¬ "¹Ê¹ú"]
+                context = ["^", "^´º»¨ÇïÔÂºÎÊ±ÁË$", "´º»¨ÇïÔÂºÎÊ±ÁË$ÍùÊÂÖª¶àÉÙ$"]
+                label = ["´º»¨ÇïÔÂºÎÊ±ÁË$", "ÍùÊÂÖª¶àÉÙ$", "Ğ¡Â¥×òÒ¹ÓÖ¶«·ç$"]
         '''
         with tf.Session() as sess:
             ckpt = tf.train.get_checkpoint_state(save_dir)
@@ -215,12 +267,12 @@ class Generator():
             for i in range(epoch):
                 cnt = 0
                 for keyword, context, label in batch_train_data(_BATCH_SIZE): # _BATCH_SIZE * l; _BATCH_SIZE * length; _BATCH_SIZE * length
-                    # è¿™ä¸ªå¾ªç¯ä¼šè¿›è¡Œ æ€»å”è¯—æ•° / _BATCH_SIZEæ¬¡
+                    # Õâ¸öÑ­»·»á½øĞĞ ×ÜÌÆÊ«Êı / _BATCH_SIZE´Î
                     if len(keyword) < _BATCH_SIZE:
                         break
                     kw, kw_l = self.get_data_length(keyword)
                     ct, ct_l = self.get_data_length(context)
-                    dd, dd_l = self.get_decoder_length(context)
+                    dd, dd_l = self.get_data_length(label)
                     lb = self.get_label(label)
                     feed_dict = {
                         self.keyword: kw,
@@ -231,10 +283,11 @@ class Generator():
                         self.decoder_length:dd_l,
                         self.decoder_input:dd
                     }
-                    print(np.shape(lb))
+                    #print(np.shape(lb))
                     _, loss = sess.run([self.train_op, self.mean_loss], feed_dict=feed_dict)
                     cnt+=1
-                    print("it is trainning!!!loss:%f", loss)
+                    print(cnt, loss)
+                    #print("it is trainning!!!loss:%f", loss)
                     if cnt % 64 == 0:
                         self.saver.save(sess, _model_path)
                         print("epoch: %d, have_trained_batch: %d, loss: %f"%(i, cnt, loss))
@@ -256,15 +309,25 @@ class Generator():
 
     def get_data_length(self, a):
         '''
-                keyword = ["æ˜¥"ï¼Œ "å¾€äº‹"ï¼Œ "æ¥¼"ï¼Œ "æ•…å›½"]
-                context = ["^", "^æ˜¥èŠ±ç§‹æœˆä½•æ—¶äº†$", "^æ˜¥èŠ±ç§‹æœˆä½•æ—¶äº†$å¾€äº‹çŸ¥å¤šå°‘$"]
-                setence = ["æ˜¥èŠ±ç§‹æœˆä½•æ—¶äº†$", "æ˜¥èŠ±ç§‹æœˆä½•æ—¶äº†$å¾€äº‹çŸ¥å¤šå°‘$", "æ˜¥èŠ±ç§‹æœˆä½•æ—¶äº†$å¾€äº‹çŸ¥å¤šå°‘$å°æ¥¼æ˜¨å¤œåˆä¸œé£$"]
+                keyword = ["´º"£¬ "ÍùÊÂ"£¬ "Â¥"£¬ "¹Ê¹ú"]
+                context = ["^", "^´º»¨ÇïÔÂºÎÊ±ÁË$", "^´º»¨ÇïÔÂºÎÊ±ÁË$ÍùÊÂÖª¶àÉÙ$"]
+                setence = ["´º»¨ÇïÔÂºÎÊ±ÁË$", "´º»¨ÇïÔÂºÎÊ±ÁË$ÍùÊÂÖª¶àÉÙ$", "´º»¨ÇïÔÂºÎÊ±ÁË$ÍùÊÂÖª¶àÉÙ$Ğ¡Â¥×òÒ¹ÓÖ¶«·ç$"]
         '''
         assert type(a) == list
         assert len(a) == _BATCH_SIZE
-        # a æ˜¯å­—ç¬¦ä¸²åºåˆ—
+        # a ÊÇ×Ö·û´®ĞòÁĞ
+        for i in range(_BATCH_SIZE):
+            text = a[i]
+            for ch in text:
+                if ch == '^':
+                    text = text.replace(ch, ch+' ')
+                if ch == '$':
+                    text = text.replace(ch, ' '+ch+' ')
+            text = text.strip()
+            text = text.split()
+            a[i] = text
         maxtime = max(map(len, a))
-        ret = np.zeros(shape=[_BATCH_SIZE, maxtime, CHAR_VEC_DIM], dtype=np.float32)
+        ret = np.zeros(shape=[_BATCH_SIZE, maxtime, WORD_VEC_DIM], dtype=np.float32)
         length = np.zeros(shape=[_BATCH_SIZE, 1])
         for i in range(_BATCH_SIZE):
             length[i] = len(a[i])
@@ -272,14 +335,14 @@ class Generator():
                 if j < len(a[i]):
                     ret[i][j] = self.char2vec.get_vect(a[i][j])
                 else:
-                    ret[i][j] = self.char2vec.get_vect(end_of_sentence()) #ä¸ç¡®å®š
+                    ret[i][j] = self.char2vec.get_vect(end_of_sentence()) #²»È·¶¨
         length = np.reshape(length, [length.shape[0]])
         return ret, length
     def get_label(self, a):
-        '''label = ["æ˜¥èŠ±$", "å¾€$", "å°$"]
-            label = [id(chun), id(å¾€), id(å°), id(èŠ±), id($), id($), id($), id($), id($)]
+        '''label = ["´º»¨$", "Íù$", "Ğ¡$"]
+            label = [id(chun), id(Íù), id(Ğ¡), id(»¨), id($), id($), id($), id($), id($)]
         '''
-        print(type(a))
+        #print(type(a))
         assert type(a) == list
         assert len(a) == _BATCH_SIZE
         maxtime = max(map(len, a))
@@ -288,12 +351,13 @@ class Generator():
         for i in range(_BATCH_SIZE):
             for j in range(maxtime):
                 if(len(a[i]) < j + 1):
-                    ret[tmp] = self.char_dict.char2int(end_of_sentence())
+                    ret[tmp] = self.char_dict.word2int(end_of_sentence())
                 else:
-                    ret[tmp] = self.char_dict.char2int(a[i][j])
+                    ret[tmp] = self.char_dict.word2int(a[i][j])
                 tmp+=1
         return ret
 if __name__ == "__main__":
     generator = Generator()
-    poem = generator.generate(["æ¢…", "å…°", "ç«¹", "èŠ"])
+    #generator.train(epoch = 1)
+    poem = generator.generate(["Çï", "´º", "³î"], "±ÌÓñ ×±³É Ò»Ê÷ ¸ß")
     print(poem)

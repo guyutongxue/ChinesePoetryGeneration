@@ -67,7 +67,7 @@ def _gen_word2vec():
     print("Generating word2vec model ...")
     word_dict = wordDict()
     poems = Poems()
-    model = models.Word2Vec(poems, size = WORD_VEC_DIM, min_count = 1) # 现在的分词下词频低，保留的所有词
+    model = models.Word2Vec(poems, size = WORD_VEC_DIM, min_count = 2) # 现在的分词下词频低，保留的所有词
     embedding = uniform(-1.0, 1.0, [len(word_dict), WORD_VEC_DIM])
     for i, ch in enumerate(word_dict):
         if ch in model:
