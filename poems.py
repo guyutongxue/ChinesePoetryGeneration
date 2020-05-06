@@ -36,8 +36,8 @@ def _gen_poems():
 class Poems(Singleton):
 
     def __init__(self):
-        #if not check_uptodate(poems_path):
-        _gen_poems()
+        if not check_uptodate(poems_path):
+            _gen_poems()
         self.poems = []
         with open(poems_path, 'r',encoding='utf-8') as fin:
             for line in fin.readlines():

@@ -98,10 +98,10 @@ class PronDict(Singleton):
 # For testing purpose.
 if __name__ == '__main__':
     pron_dict = PronDict()
-    print(pron_dict.co_rhyme('ÑÌ', 'ÔÂ'))
-    assert not pron_dict.co_rhyme('¸ò', 'ÈË')
-    assert pron_dict.counter_tone('Æ½', 'ØÆ')
-    assert not pron_dict.counter_tone('Æð', 'Æú')
+    print(pron_dict.co_rhyme('çƒŸ', 'æœˆ'))
+    assert not pron_dict.co_rhyme('è›¤', 'äºº')
+    assert pron_dict.counter_tone('å¹³', 'ä»„')
+    assert not pron_dict.counter_tone('èµ·', 'å¼ƒ')
     cnt = 0
     for ch in pron_dict:
         print(ch + ": "+str(pron_dict[ch]))
