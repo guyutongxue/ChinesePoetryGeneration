@@ -92,7 +92,7 @@ class Planner(Singleton):
                     break
             result.append(self.ranked_words[idx])
             filtered_keywords.append(self.ranked_words[idx])
-            for i in range(NUM_OF_SENTENCES):
+            for i in range(NUM_OF_SENTENCES - 1):
                 similars = self.model.wv.most_similar(
                     positive=filtered_keywords)
                 similars = sorted(similars, key=lambda x: x[1])
@@ -105,5 +105,5 @@ class Planner(Singleton):
 # For testing purpose.
 if __name__ == '__main__':
     planner = Planner()
-    keywords = planner.plan("寒雨 连 江 夜 入 吴")
+    keywords = planner.plan("横看成岭侧成峰")
     print(keywords)
