@@ -9,7 +9,7 @@ import os
 
 root_dir = os.path.dirname(__file__)
 data_dir = os.path.join(root_dir, 'data')
-raw_dir = os.path.join(root_dir, 'raw')
+raw_dir = os.path.join(root_dir, 'raw/raw')
 save_dir = os.path.join(root_dir, 'save')
 
 sxhy_path = os.path.join(data_dir, 'sxhy_dict.txt')
@@ -34,6 +34,8 @@ def check_uptodate(path: str) -> bool:
     """
     Return true iff the file exists and up-to-date with dependencies.
     """
+    return os.path.exists(path)
+    '''
     if not os.path.exists(path):
         # File not found.
         return False
@@ -45,4 +47,5 @@ def check_uptodate(path: str) -> bool:
                 # File stale.
                 return False
     return True
+    '''
 
