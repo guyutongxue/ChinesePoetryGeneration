@@ -359,6 +359,6 @@ class Generator():
 if __name__ == "__main__":
     # word2vec = word2Vec()
     generator = Generator()
-    generator.train(epoch = 1)
+    #generator.train(epoch = 100)
     poem = generator.generate(["秋", "春", "愁"], "碧玉 妆成 一树 高")
     print(poem)
