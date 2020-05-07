@@ -1,6 +1,6 @@
 # -*- coding:utf-8 -*-
 """
-对于输入的文本，得到四个句子中心词
+对于输入的首句，得到三个句子中心词
 """
 from data_utils import gen_train_data
 from gensim import models
@@ -8,11 +8,11 @@ from paths import save_dir, plan_data_path, check_uptodate
 from random import random, shuffle, randint
 from rank_words import RankedWords
 from singleton import Singleton
-from utils import NUM_OF_SENTENCES
 import jieba
 import os
 
 _plan_model_path = os.path.join(save_dir, 'plan_model.bin')
+NUM_OF_SENTENCES = 3
 
 
 def is_cn_char(ch):
@@ -73,51 +73,37 @@ class Planner(Singleton):
     def plan(self, text):
         """得到四个关键词"""
         keywords = self.extract(text)
-        if len(keywords) > NUM_OF_SENTENCES:
-            # 如果keywords数量多于NUM_OF_SENTENCES,则按照rankwords删去多余的keywords
-            keywords_rank = {}
-            for keyword in keywords:
-                keywords_rank[keyword] = self.word2idx[keyword]
-            keywords_sorted = sorted(
-                zip(keywords_rank.values(), keywords_rank.keys()))
-            keywords.clear()
-            keywords = [keywords_sorted[i][1] for i in range(NUM_OF_SENTENCES)]
-        elif len(keywords) < NUM_OF_SENTENCES:
-            dif = NUM_OF_SENTENCES - len(keywords)
-            # 如果keywords数量少于NUM_OF_SENTENCES
-            # 先过滤出在model中的keywords
-            filtered_keywords = list(
-                filter(lambda w: w in self.model.wv, keywords))
-            if len(filtered_keywords) > 0:  # 存在在model中的keywords
-                # 寻找与model中的keywords中的词最相似的词语
-                for i in range(dif):
-                    similars = self.model.wv.most_similar(
-                        positive=filtered_keywords)
-                    similars = sorted(similars, key=lambda x: x[1])
-                    keywords.add(similars[0][0])
-                    filtered_keywords.append(similars[0][0])
-            else:
-                # 否则只好随机找一个关键词，再生成剩余关键词
-                while True:
-                    idx = randint(0, len(self.ranked_words) - 1)
-                    if self.ranked_words[idx] in self.model:
-                        break
-                keywords.add(self.ranked_words[idx])
-                filtered_keywords.append(self.ranked_words[idx])
-                for i in range(dif-1):
-                    similars = self.model.wv.most_similar(
-                        positive=filtered_keywords)
-                    similars = sorted(similars, key=lambda x: x[1])
-                    keywords.add(similars[0][0])
-                    filtered_keywords.append(similars[0][0])
+        result=[]
+        filtered_keywords = list(
+            filter(lambda w: w in self.model.wv, keywords))
+        if len(filtered_keywords) > 0:  # 存在在model中的keywords
+            # 寻找与model中的keywords中的词最相似的词语
+            for i in range(NUM_OF_SENTENCES):
+                similars = self.model.wv.most_similar(
+                    positive=filtered_keywords)
+                similars = sorted(similars, key=lambda x: x[1])
+                result.append(similars[0][0])
+                filtered_keywords.append(similars[0][0])
+        else:
+            # 否则只好随机找一个关键词，再生成剩余关键词
+            while True:
+                idx = randint(0, len(self.ranked_words) - 1)
+                if self.ranked_words[idx] in self.model:
+                    break
+            result.append(self.ranked_words[idx])
+            filtered_keywords.append(self.ranked_words[idx])
+            for i in range(NUM_OF_SENTENCES):
+                similars = self.model.wv.most_similar(
+                    positive=filtered_keywords)
+                similars = sorted(similars, key=lambda x: x[1])
+                result.append(similars[0][0])
+                filtered_keywords.append(similars[0][0])
 
-            keywords = list(keywords)
-
-        return keywords
+        return result
 
 
 # For testing purpose.
 if __name__ == '__main__':
     planner = Planner()
-    keywords = planner.plan("春天到了，桃花开了。")
+    keywords = planner.plan("寒雨 连 江 夜 入 吴")
     print(keywords)

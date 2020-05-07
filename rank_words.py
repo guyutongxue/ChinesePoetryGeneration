@@ -87,7 +87,7 @@ class RankedWords(Singleton):
         """
         Execute the TextRank algorithm.
         """
-
+        raise Exception("here")
         print("Do text ranking ...")
         # 获取共现矩阵
         adjlists = self._get_adjlists()

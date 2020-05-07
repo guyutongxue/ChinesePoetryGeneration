@@ -5,6 +5,10 @@
 ## To-do
 
 - [x] Word Ranking 谷
-- [ ] Generator 陈、郭
-- [ ] Planner 庄
-- [ ] ...
+- [x] Generator 陈、郭
+- [x] Planner 庄
+
+
+## Issues
+
+- Codes are TOO mess.
