@@ -4,6 +4,8 @@
 
 *此部分对应论文 §3.2.1 Word Extracting*
 
+TextRank 用于计算关键词的权重，从而在 Planner 规划中起到了选词的作用。
+
 ### PageRank 算法
 
 记 $V=\{V_1,V_2,\cdots,V_|V|\}$ 为所有页面的集合。则
