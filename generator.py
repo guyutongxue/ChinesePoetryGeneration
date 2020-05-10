@@ -282,7 +282,12 @@ class Generator():
             if (idx == 16 - word_length or idx == 32 - word_length) and \
                     not pron_dict.co_rhyme(last_ch, text[7]):
                 prob_list[i] *= 1e-7  # 不押韵可以继续降低权重，保证视觉效果
+            if (idx == 16 - word_length or idx == 32 - word_length) and \
+                     pron_dict.counter_tone(last_ch, '平'):
+                prob_list[i] *= 1e-7
 
+            if (idx==24-word_length)and not pron_dict.counter_tone(last_ch, '平'):
+                prob_list[i]*=0.1
             if idx > 2 and idx % 8 == 2 and \
                     not pron_dict.counter_tone(text[2], first_ch) and word_length == 1:
                 prob_list[i] *= 0.4
