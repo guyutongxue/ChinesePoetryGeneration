@@ -1,5 +1,6 @@
 from plan import Planner
-from new_generator import Generator
+from generator import Generator
+from typing import Set, List
 import os
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
 
@@ -8,8 +9,12 @@ if __name__ == '__main__':
     planner = Planner()
     generator = Generator()
     while True:
-        hint = input("Type first sentence: ")
-        keywords = planner.plan(hint)
+        hint : str = input("Type first sentence: ")
+        words : tuple = (hint[0:2], hint[2:4], hint[4:6], hint[6:7])
+        hint = ' '.join(words)
+        print(hint)
+        keywords : List[str] = planner.plan(hint)
         print("Keywords: ", keywords)
-        poem = generator.generate(keywords, hint)
-        print("Poem: ", poem)
+        poem : List[str] = generator.generate(keywords, hint)
+        output = '\n'.join(poem).replace(' ','')
+        print("Poem: \n", output)

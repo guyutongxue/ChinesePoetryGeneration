@@ -12,7 +12,7 @@ import subprocess
 
 def gen_train_data():
     print("Generating training data ...")
-    with open(r'raw/raw/corpus.txt', 'r',encoding='utf-8') as fin:
+    with open(r'raw/corpus.txt', 'r',encoding='utf-8') as fin:
         for line in fin.readlines()[0 : 6]:
             for sentence in split_sentences(line):
                 print(' '.join(sentence))
