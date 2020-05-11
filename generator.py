@@ -191,7 +191,6 @@ class Generator():
                     self.context: ct,
                     self.context_length: ct_l,
                 }
-                tmp = sess.run(self.generate_probs, feed_dict=feed_dict)
                 prob = sess.run(self.inference, feed_dict=feed_dict)
                 context += end_of_sentence()
                 for j in range(LEN_PER_SENTENCE):
@@ -249,13 +248,13 @@ class Generator():
                 context += end_of_sentence()
         return context[1:].split(end_of_sentence())
 
-    def gen_prob_list(self, probs, context, pron_dict):  # param probs:softmax输出的概率分布 context:已生成的句子 pron_dict:音律字典
-        prob_list = probs.tolist()  # array->list 取首行
-        prob_list[0] *= 0
-        prob_list[-1] *= 0  # 首尾置0
+    def gen_prob_list(self, probs, context, pron_dict):#param probs:softmax输出的概率分布 context:已生成的句子 pron_dict:音律字典
+        prob_list = probs.tolist()#array->list 取首行
+        prob_list[0]*=0
+        prob_list[-1]*=0#首尾置0
         text = context
         text = text.replace(' ', '')
-        # print(text)
+        #print(text)
         idx = len(text)
         used_chars = set(ch for ch in context)
         for i in range(1, len(prob_list) - 1):
@@ -264,30 +263,28 @@ class Generator():
             if word_length == 0:
                 continue
             first_ch = word[0]
-            last_ch = word[-1]  # 末尾单字
-            # idx比list下标要大1(因为有start_of_sentence为context[0])
-            # 一行7个字一个end e.g:a[1]-a[7]=char a[8]=$
+            last_ch = word[-1]#末尾单字
+            #idx比list下标要大1(因为有start_of_sentence为context[0])
+            #一行7个字一个end e.g:a[1]-a[7]=char a[8]=$
             # Penalize used characters. 字词重复
             if first_ch in used_chars or last_ch in used_chars:
                 prob_list[i] *= 0.01
 
-            # 超字处理，默认词语最长为2，直接概率清零，确保不超
-            if (idx == 6 or idx == 14 or idx == 22 or idx == 30) and word_length == 1:
+            #超字处理，默认词语最长为2，直接概率清零，确保不超
+            if(idx == 6 or idx == 14 or idx == 22 or idx == 30) and word_length == 1:
                 prob_list[i] *= 0
                 continue
-            if (idx == 7 or idx == 15 or idx == 23 or idx == 31) and (word_length == 2):
+            if(idx == 7 or idx == 15 or idx == 23 or idx == 31) and (word_length == 2):
                 prob_list[i] *= 0
                 continue
-            # 下面的押韵、平仄同理可以后面再细改，等确定数据形式我再来改
-            if (idx == 16 - word_length or idx == 32 - word_length) and \
+            if(idx == 1 or idx == 3 or idx == 9 or idx == 11 or idx == 17 or idx == 19 or idx == 25 or idx == 27) and word_length == 1:
+                prob_list[i] *= 0
+                continue
+            #下面的押韵、平仄同理可以后面再细改，等确定数据形式我再来改
+            if (idx == 16-word_length or idx == 32-word_length) and \
                     not pron_dict.co_rhyme(last_ch, text[7]):
-                prob_list[i] *= 1e-7  # 不押韵可以继续降低权重，保证视觉效果
-            if (idx == 16 - word_length or idx == 32 - word_length) and \
-                     pron_dict.counter_tone(last_ch, '平'):
-                prob_list[i] *= 1e-7
+                prob_list[i] *= 1e-7#不押韵可以继续降低权重，保证视觉效果
 
-            if (idx==24-word_length)and not pron_dict.counter_tone(last_ch, '平'):
-                prob_list[i]*=0.1
             if idx > 2 and idx % 8 == 2 and \
                     not pron_dict.counter_tone(text[2], first_ch) and word_length == 1:
                 prob_list[i] *= 0.4
@@ -295,13 +292,14 @@ class Generator():
                     not pron_dict.counter_tone(text[2], last_ch) and word_length == 2:
                 prob_list[i] *= 0.4
 
-            if (idx % 8 == 4 or idx % 8 == 6) and \
+            if (idx % 8  == 4 or idx % 8 == 6) and \
                     not pron_dict.counter_tone(text[idx - 2], first_ch) and word_length == 1:
                 prob_list[i] *= 0.4
-            if (idx % 8 == 3 or idx % 8 == 5) and \
+            if (idx % 8  == 3 or idx % 8 == 5) and \
                     not pron_dict.counter_tone(text[idx - 2], last_ch) and word_length == 2:
                 prob_list[i] *= 0.4
         return prob_list
+
 
     def train(self, epoch):
         '''
