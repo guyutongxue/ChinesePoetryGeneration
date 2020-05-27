@@ -12,8 +12,8 @@ import numpy as np
 import os
 import sys
 import tensorflow as tf
-
-_BATCH_SIZE = 128
+import time
+_BATCH_SIZE = 48
 NUM_UNITS = 256
 LEN_PER_SENTENCE = 4
 _model_path = os.path.join(save_dir, 'model')
@@ -62,23 +62,28 @@ class Generator():
             sequence_length=self.context_length,
             dtype=tf.float32,
             scope="context_encoder")
+        a, b = _
+        print(a, '\n', b)
+        self.context_state = tf.concat([a, b], axis = -1)
+
         output_fw, output_bw = outputs
         self.context_output = tf.concat([output_fw, output_bw], axis=-1)
         tf.TensorShape([_BATCH_SIZE, None, NUM_UNITS]).assert_same_rank(self.context_output.shape)
 
     def _build_decoder(self):
         with tf.name_scope("decoder"):
+            self.memo = tf.concat([tf.reshape(self.keyword_state, [_BATCH_SIZE, 1, NUM_UNITS]), self.context_output], axis=1)
             attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(
                 num_units=NUM_UNITS,
-                memory=self.context_output,  # 将 两个 encoder 的输入作为输出
-                memory_sequence_length=self.context_length,
+                memory=self.memo,  # 将 两个 encoder 的输入作为输出
+                memory_sequence_length=self.context_length + 1,
                 name="BahdanauAttention",
             )
             # 将解码GRU单元用ATTENSTTION封装
             self.decoder_rnn_cell = tf.contrib.seq2seq.AttentionWrapper(  # decoder 的RNN单元
                 cell=tf.contrib.rnn.GRUCell(NUM_UNITS),
                 attention_mechanism=attention_mechanism,
-                initial_cell_state=self.keyword_state,
+                initial_cell_state=self.context_state,
                 name="decoder_rnn_cell",
             )
             # 解码器训练
@@ -92,8 +97,6 @@ class Generator():
                 dtype=tf.int32,
                 name='length'
             )
-            decoder_init_state = self.decoder_rnn_cell.zero_state(dtype=tf.float32, batch_size=_BATCH_SIZE).clone(
-                cell_state=self.keyword_state)
             self.decoder_output, _ = tf.nn.dynamic_rnn(
                 cell=self.decoder_rnn_cell,
                 inputs=self.decoder_input,
@@ -123,13 +126,11 @@ class Generator():
             self.probs = tf.nn.softmax(tf.matmul(reshaped_output, self.weight) + self.bias, axis=-1)
             # tf.TensorShape([_BATCH_SIZE, len(self.char_dict)]).assert_same_rank(self.probs.shape)
     def _build_inference(self):
-        decoder_init_state = self.decoder_rnn_cell.zero_state(dtype=tf.float32, batch_size=_BATCH_SIZE).clone(
-            cell_state=self.keyword_state)
         embedding = tf.constant(word2Vec().get_embedding(), dtype=tf.float32)
         tmp = tf.ones(shape=[_BATCH_SIZE, 1], dtype=tf.int32) * wordDict().word2int(start_of_sentence())
         input = tf.nn.embedding_lookup(embedding, tmp)
         input = tf.squeeze(input)
-        output, state = self.decoder_rnn_cell(input, decoder_init_state)
+        output, state = self.decoder_rnn_cell(input, self.decoder_rnn_cell.zero_state(dtype=tf.float32, batch_size=_BATCH_SIZE))
         out_put_prob = tf.nn.softmax((tf.matmul(output, self.weight) + self.bias), axis=-1)
         y_id = tf.argmax(out_put_prob, axis=-1)
         self.generate_probs = out_put_prob
@@ -171,6 +172,11 @@ class Generator():
         self._build_layers()  # 生成结构
         self.saver = tf.train.Saver(tf.global_variables())  # 定义模型
     def generate_chen(self, keywords, context):
+        for i in range(len(keywords)):
+            if len(keywords[i]) == 2:
+                s = keywords[i]
+                keywords[i] = keywords[0]
+                keywords[0] = s
         pron_dict = PronDict()
         context = "^" + context
         with tf.Session() as sess:
@@ -192,17 +198,17 @@ class Generator():
                     self.context_length: ct_l,
                 }
                 prob = sess.run(self.inference, feed_dict=feed_dict)
-                context += end_of_sentence()
+
                 for j in range(LEN_PER_SENTENCE):
                     prob_lists = self.gen_prob_list(prob[j * _BATCH_SIZE], context, pron_dict)
                     char = self.char_dict.int2word(prob_lists.index(max(prob_lists)))
                     # print(char)
                     context += char
                     context += ' '
+                context += end_of_sentence()
                 #context += end_of_sentence()
         return context[1:].split(end_of_sentence())
-    def generate(self, keywords, context):
-        '''
+    '''def generate(self, keywords, context):
             输入：
                 keyword：
                 keyword_length
@@ -213,7 +219,6 @@ class Generator():
                 keyword = ["春"， "华"， “秋”， “实”]
                 context = ["^"] -> ["^春花秋月何时了$"] -> ["^春花秋月何时了$往事知多少$"]
                 ret =
-        '''
         pron_dict = PronDict()
         context = "^" + context + "$"
         with tf.Session() as sess:
@@ -246,7 +251,7 @@ class Generator():
                     context += char
                     context += ' '
                 context += end_of_sentence()
-        return context[1:].split(end_of_sentence())
+        return context[1:].split(end_of_sentence())'''
 
     def gen_prob_list(self, probs, context, pron_dict):#param probs:softmax输出的概率分布 context:已生成的句子 pron_dict:音律字典
         prob_list = probs.tolist()#array->list 取首行
@@ -321,7 +326,12 @@ class Generator():
                 sess.run(tf.local_variables_initializer())
             else:
                 self.saver.restore(sess, ckpt.model_checkpoint_path)
+            loss = float()
             for i in range(epoch):
+                time.sleep(10)
+                if i != 0:
+                    with open("Loss.txt", 'a') as f:
+                        f.write(str(loss) + '\n')
                 cnt = 0
                 for keyword, context, label in batch_train_data(
                         _BATCH_SIZE):  # _BATCH_SIZE * l; _BATCH_SIZE * length; _BATCH_SIZE * length
@@ -330,7 +340,13 @@ class Generator():
                         break
                     kw, kw_l = self.get_data_length(keyword)
                     ct, ct_l = self.get_data_length(context)
-                    dd, dd_l = self.get_data_length(label)
+                    label_ = []
+                    for j in range(len(label)):
+                        label_.append(label[j])
+                    for j in range(len(label)):
+                        label[j] = label[j][:-1]
+                        label[j] += ' $'
+                    dd, dd_l = self.get_data_length(label_, 1)
                     lb = self.get_label(label)
                     feed_dict = {
                         self.keyword: kw,
@@ -341,15 +357,16 @@ class Generator():
                         self.decoder_length: dd_l,
                         self.decoder_input: dd
                     }
+                    # decoder_output 出现问题
                     # print(np.shape(lb))
-                    _, loss = sess.run([self.train_op, self.mean_loss], feed_dict=feed_dict)
+                    t2, t0, t1, t, _, loss = sess.run([self.decoder_output, self.decoder_rnn_cell.zero_state(dtype=tf.float32, batch_size=_BATCH_SIZE), self.memo, self.probs, self.train_op, self.mean_loss], feed_dict=feed_dict)
                     cnt += 1
-                    print(cnt, loss)
+                    # print(cnt, loss)
                     # print("it is trainning!!!loss:%f", loss)
                     if cnt % 64 == 0:
                         self.saver.save(sess, _model_path)
                         print("epoch: %d, have_trained_batch: %d, loss: %f" % (i, cnt, loss))
-                        break
+
 
     def get_decoder_length(self, a):
         assert type(a) == list
@@ -366,7 +383,7 @@ class Generator():
         ret, ret_l = self.get_data_length(a)
         return ret, ret_l
 
-    def get_data_length(self, a):
+    def get_data_length(self, a, t = 0):
         '''
                 keyword = ["春"， "往事"， "楼"， "故国"]
                 context = ["^", "^春花秋月何时了$", "^春花秋月何时了$往事知多少$"]
@@ -376,6 +393,8 @@ class Generator():
         assert len(a) == _BATCH_SIZE
         # a 是字符串序列
         for i in range(_BATCH_SIZE):
+            if t == 1:
+                a[i] = ('^' + a[i])[:-1]
             text = a[i]
             for ch in text:
                 if ch == '^':
@@ -405,21 +424,22 @@ class Generator():
         # print(type(a))
         assert type(a) == list
         assert len(a) == _BATCH_SIZE
-        maxtime = max(map(len, a))
+        maxtime = LEN_PER_SENTENCE + 1
         ret = np.zeros(shape=(_BATCH_SIZE * maxtime), dtype=np.int32)
         tmp = 0
         for i in range(_BATCH_SIZE):
-            for j in range(maxtime):
-                if (len(a[i]) < j + 1):
+            tmpS = a[i].split(' ')
+            for j in range(LEN_PER_SENTENCE + 1):
+                if (len(tmpS) < j + 1):
                     ret[tmp] = self.char_dict.word2int(end_of_sentence())
                 else:
-                    ret[tmp] = self.char_dict.word2int(a[i][j])
+                    ret[tmp] = self.char_dict.word2int(tmpS[j])
                 tmp += 1
         return ret
 
 
 if __name__ == "__main__":
     generator = Generator()
-    #generator.train(epoch = 100)
+    generator.train(epoch = 100)
     poem = generator.generate_chen(["秋", "春", "愁"], "春花 秋月 何时 了 ")
     print(poem)
