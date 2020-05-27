@@ -359,7 +359,7 @@ class Generator():
                     }
                     # decoder_output 出现问题
                     # print(np.shape(lb))
-                    t2, t0, t1, t, _, loss = sess.run([self.decoder_output, self.decoder_rnn_cell.zero_state(dtype=tf.float32, batch_size=_BATCH_SIZE), self.memo, self.probs, self.train_op, self.mean_loss], feed_dict=feed_dict)
+                    _, loss = sess.run([self.train_op, self.mean_loss], feed_dict=feed_dict)
                     cnt += 1
                     # print(cnt, loss)
                     # print("it is trainning!!!loss:%f", loss)
